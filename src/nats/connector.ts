@@ -233,21 +233,6 @@ export class MessagingConnector {
         const bytes = this.encoder().encode(payload);
         return await this.jetStreamContext.jsc.publish(subject, bytes);
     }
-    /**
-     * Subscribe subscribes to a subject, retrieving messages asynchronously.
-     *
-     * To decode the payload use MsgCon.Encoder.Decode
-     *
-     * This method does not use JetStream, therefore no QOS is guaranteed.
-     * For reliable messaging see SubscribeDurableAsync
-     *
-     * For more information on the behavior, parameters, and return value see nats.Conn.Subscribe
-     */
-    subscribe(subject: string, handler: (msg: any) => void) {
-        return this.natsContext.subscribe(subject, {
-            callback: handler,
-        });
-    }
 
     /**
      * SubscribeDurable durably subscribes to a subject, retrieving messages asynchronously.
@@ -261,10 +246,10 @@ export class MessagingConnector {
      *
      * For more information on the behavior, parameters, and return value see nats.JetStreamContext.Subscriber
      */
-    subscribeDurable(streamName: string, consumerName: string) {
+    subscribeDurable(subject: string, streamName: string, consumerName: string) {
         const opts = consumerOpts();
         opts.bind(streamName, consumerName);
-        return this.jetStreamContext.jsc.subscribe('', opts);
+        return this.jetStreamContext.jsc.subscribe(subject, opts);
     }
 
     // defaultDurableSubOptions returns some sensible default SubOpts for the JetStream Subscribe Functions
