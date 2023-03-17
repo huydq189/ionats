@@ -1,6 +1,8 @@
+import { AckPolicy, JSONCodec, RetentionPolicy } from 'nats';
 import { Config, PersistentConfigurationAction } from './nats/config';
 import { MessagingConnector } from './nats/connector';
-import { Options } from './nats/options';
+import { Options, OptionsBuilder } from './nats/options';
+
 type complexData = {
     name: string;
 };
@@ -11,7 +13,24 @@ async function subscribe() {
         requiredConsumersConfigurationAction: PersistentConfigurationAction.CreateIfMissing,
     };
     const mc = new MessagingConnector(config);
-    mc.setOptions().;
+    const options = mc
+        .optionsBuilder()
+        .setRequiredStreams([
+            {
+                name: 'Sample-Stream',
+                retention: RetentionPolicy.Workqueue,
+            },
+        ])
+        .setEncoder(JSONCodec)
+        .setRequiredConsumers({
+            'Sample-Stream': [
+                {
+                    durable_name: 'Sample-Consumer',
+                    ack_policy: AckPolicy.Explicit,
+                },
+            ],
+        });
+    mc.setOptions(options);
     await mc.connect();
 
     const sub = await mc.subscribeDurable('Sample-Stream', 'Sample-Consumer');
@@ -27,18 +46,34 @@ async function publish() {
         requiredStreamsConfigurationAction: PersistentConfigurationAction.CreateIfMissing,
         requiredConsumersConfigurationAction: PersistentConfigurationAction.CreateIfMissing,
     };
-
     const mc = new MessagingConnector(config);
+    const options = new OptionsBuilder()
+        .setRequiredStreams([
+            {
+                name: 'Sample-Stream',
+                retention: RetentionPolicy.Workqueue,
+            },
+        ])
+        .setEncoder(JSONCodec)
+        .setRequiredConsumers({
+            'Sample-Stream': [
+                {
+                    durable_name: 'Sample-Consumer',
+                    ack_policy: AckPolicy.Explicit,
+                },
+            ],
+        });
+    mc.setOptions(options);
     await mc.connect();
 
-    let err = mc.publishDurable('subject1', 'payload1'); //payload1 is a string
+    mc.publishDurable('', 'payload1'); //payload1 is a string
 
-    err = mc.publishDurable('subject2', 123); //payload2 is a number
+    // mc.publishDurable('subject2', 123); //payload2 is a number
 
-    err = mc.publishDurable('subject3', {
-        name: 'asd',
-        whatever: 5,
-    }); //payload3 is a dict
+    // mc.publishDurable('subject3', {
+    //     name: 'asd',
+    //     whatever: 5,
+    // }); //payload3 is a dict
 }
 
 // Message không bị mất at least 1

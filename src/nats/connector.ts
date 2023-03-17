@@ -1,4 +1,5 @@
 import {
+    connect,
     ConsumerConfig,
     consumerOpts,
     JetStreamClient,
@@ -6,13 +7,11 @@ import {
     JSONCodec,
     Msg,
     NatsConnection,
-    StreamConfig,
-    connect,
     StringCodec,
 } from 'nats';
 import { Config, PersistentConfigurationAction } from './config';
 import { Options, OptionsBuilder } from './options';
-import { error } from './types/options.type';
+import { error, StreamOption } from './types/options.type';
 
 type JetStreamContext = {
     jsm: JetStreamManager;
@@ -31,8 +30,6 @@ export class MessagingConnector {
     private _natsContext: NatsConnection;
     private _jetStreamContext: JetStreamContext;
 
-    private _encoder: typeof JSONCodec | typeof StringCodec;
-
     get config(): Config {
         return this._config;
     }
@@ -47,6 +44,10 @@ export class MessagingConnector {
 
     set options(options: Options) {
         this._options = options;
+    }
+
+    get connected(): boolean {
+        return this._connected;
     }
 
     set connected(connected: boolean) {
@@ -105,77 +106,70 @@ export class MessagingConnector {
      * MessagingConnector.OptionsBuilder().setA().setB().build()
      * @param opts
      */
-    setOptions(options: Options) {
-        this.options = options;
+    setOptions(builder: OptionsBuilder) {
+        this.options = builder.build();
     }
 
-    static OptionsBuilder(): OptionsBuilder {
+    optionsBuilder(): OptionsBuilder {
         return new OptionsBuilder();
     }
 
-    async configureRequiredStreams(): Promise<error> {
-        try {
-            const missingStreams: Map<string, StreamConfig> = new Map();
-            for (const stream of this.options.requiredStreams) {
-                missingStreams.set(stream.name, stream);
-            }
+    async configureRequiredStreams() {
+        const missingStreams: Map<string, StreamOption> = new Map();
+        for (const stream of this.options.requiredStreams) {
+            missingStreams.set(stream.name, stream);
+        }
 
-            const streamNames = await this.jetStreamContext.jsm.streams.names().next();
-            for (const name of streamNames) {
-                missingStreams.delete(name);
+        const streams = await this.jetStreamContext.jsm.streams.list().next();
+        for (const stream of streams) {
+            missingStreams.delete(stream.config.name);
+        }
+        for (const [name, stream] of missingStreams) {
+            if (this.config.requiredStreamsConfigurationAction == PersistentConfigurationAction.DoNotTouch) {
+                throw new Error(
+                    `Required jetStream stream ${name} is missing, but RequiredStreamsConfigurationAction is DoNotTouch.`,
+                );
+            } else {
+                await this.jetStreamContext.jsm.streams.add(stream);
+                console.log('Stream added - name: ', stream.name);
             }
+        }
 
-            for (const [name, stream] of missingStreams) {
-                if (
-                    this.config.requiredStreamsConfigurationAction == PersistentConfigurationAction.DoNotTouch
-                ) {
-                    return new Error(
-                        `Required jetStream stream ${name} is missing, but RequiredStreamsConfigurationAction is DoNotTouch.`,
-                    );
-                } else {
-                    await this.jetStreamContext.jsm.streams.add(stream);
-                }
+        for (const stream of this.options.requiredStreams) {
+            if (
+                this.config.requiredStreamsConfigurationAction === PersistentConfigurationAction.AlwaysUpdate
+            ) {
+                await this.jetStreamContext.jsm.streams.update(stream.name, stream);
             }
-
-            for (const stream of this.options.requiredStreams) {
-                if (
-                    this.config.requiredStreamsConfigurationAction ===
-                    PersistentConfigurationAction.AlwaysUpdate
-                ) {
-                    await this.jetStreamContext.jsm.streams.update(stream.name, stream);
-                }
-            }
-        } catch (error) {
-            return error;
         }
     }
 
-    async configureRequiredConsumers(): Promise<error> {
-        try {
-            for (const [streamName, requiredConsumer] of this.options.requiredConsumers.entries()) {
-                const missingConsumers: Map<string, ConsumerConfig> = new Map();
-                if (requiredConsumer.durable_name) {
-                    missingConsumers.set(requiredConsumer.durable_name, requiredConsumer);
-                }
-                const consumers = await this.jetStreamContext.jsm.consumers.list(streamName).next();
-                for (const consumer of consumers) {
-                    missingConsumers.delete(consumer.name);
-                }
-                for (const [name, consumer] of missingConsumers.entries()) {
-                    if (
-                        this.config.requiredConsumersConfigurationAction ===
-                        PersistentConfigurationAction.DoNotTouch
-                    ) {
-                        return new Error(
-                            `Required jetStream consumer ${name} for stream %s is missing, but RequiredConsumersConfigurationAction is DoNotTouch.`,
-                        );
-                    } else {
-                        await this.jetStreamContext.jsm.consumers.add(streamName, consumer);
-                    }
+    async configureRequiredConsumers() {
+        for (const [streamName, requiredConsumers] of Object.entries(this.options.requiredConsumers)) {
+            const missingConsumers: Map<string, Partial<ConsumerConfig>> = new Map();
+
+            for (const consumer of requiredConsumers) {
+                if (consumer.durable_name) {
+                    missingConsumers.set(consumer.durable_name, consumer);
                 }
             }
-        } catch (error) {
-            return error;
+
+            const consumers = await this.jetStreamContext.jsm.consumers.list(streamName).next();
+            for (const consumer of consumers) {
+                missingConsumers.delete(consumer.name);
+            }
+            for (const [name, consumer] of missingConsumers.entries()) {
+                if (
+                    this.config.requiredConsumersConfigurationAction ===
+                    PersistentConfigurationAction.DoNotTouch
+                ) {
+                    throw new Error(
+                        `Required jetStream consumer ${name} for stream %s is missing, but RequiredConsumersConfigurationAction is DoNotTouch.`,
+                    );
+                } else {
+                    await this.jetStreamContext.jsm.consumers.add(streamName, consumer);
+                }
+            }
         }
     }
 
@@ -235,9 +229,9 @@ export class MessagingConnector {
      *
      * For more information on the behavior, parameters, and return value see nats.JetStreamContext.Publish
      */
-    publishDurable(subject: string, payload: any) {
+    async publishDurable(subject: string, payload: any) {
         const bytes = this.encoder().encode(payload);
-        return this.jetStreamContext.jsc.publish(subject, bytes);
+        return await this.jetStreamContext.jsc.publish(subject, bytes);
     }
     /**
      * Subscribe subscribes to a subject, retrieving messages asynchronously.
@@ -270,7 +264,6 @@ export class MessagingConnector {
     subscribeDurable(streamName: string, consumerName: string) {
         const opts = consumerOpts();
         opts.bind(streamName, consumerName);
-        console.log(this.jetStreamContext);
         return this.jetStreamContext.jsc.subscribe('', opts);
     }
 
@@ -288,9 +281,9 @@ export class MessagingConnector {
      * Returns an error when called a second time.
      * @returns
      */
-    async connect(): Promise<error> {
+    async connect() {
         if (this.connected) {
-            return new Error(`Cannot connect a MessagingConnection that is already connected.`);
+            throw new Error(`Cannot connect a MessagingConnection that is already connected.`);
         }
 
         const nc = await connect({
@@ -304,15 +297,8 @@ export class MessagingConnector {
 
         this.jetStreamContext = { jsc, jsm };
 
-        let err = await this.configureRequiredStreams();
-        if (err) {
-            return err;
-        }
-
-        err = this.configureRequiredConsumers();
-        if (err) {
-            return err;
-        }
+        await this.configureRequiredStreams();
+        await this.configureRequiredConsumers();
 
         this.connected = true;
     }

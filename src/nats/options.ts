@@ -1,19 +1,11 @@
 // options are the options that can be set for a messaging connector.
 // For more info see setOptions
-import {
-    ConnectionOptions,
-    ConsumerConfig,
-    JetStreamOptions,
-    StreamConfig,
-    StringCodec,
-    JSONCodec,
-} from 'nats';
+import { ConnectionOptions, JetStreamOptions, JSONCodec, StringCodec } from 'nats';
+import { ConsumerOptions, StreamOptions } from './types/options.type';
 
 interface IOptions {
-    setRequiredConsumers(requiredConsumers: Map<string, ConsumerConfig>): void;
-
-    setRequiredStreams(requiredStreams: StreamConfig[]): void;
-
+    setRequiredStreams(requiredStreams: StreamOptions): void;
+    setRequiredConsumers(requiredConsumers: ConsumerOptions): void;
     setAdditionalJetStreamOptions(additionalJetStreamOptions: JetStreamOptions): void;
     setAdditionalNatsOptions(additionalNatsOptions: ConnectionOptions): void;
     setEncoder(encoder: typeof StringCodec | typeof JSONCodec): void;
@@ -21,8 +13,8 @@ interface IOptions {
 
 interface IOptionsBuilder {
     reset(): void;
-    setRequiredStreams(requiredStreams: StreamConfig[]): void;
-    setRequiredConsumers(requiredConsumers: Map<string, ConsumerConfig>): void;
+    setRequiredStreams(requiredStreams: StreamOptions): void;
+    setRequiredConsumers(requiredConsumers: ConsumerOptions): void;
     setAdditionalNatsOptions(connectionOptions: ConnectionOptions): void;
     setAdditionalJetStreamOptions(jetStreamOptions: JetStreamOptions): void;
     setEncoder(encoder: typeof StringCodec | typeof JSONCodec): void;
@@ -31,26 +23,26 @@ interface IOptionsBuilder {
 }
 
 export class Options implements IOptions {
-    requiredStreams: StreamConfig[];
-    requiredConsumers: Map<string, ConsumerConfig>;
+    requiredStreams: StreamOptions;
+    requiredConsumers: ConsumerOptions;
     additionalNatsOptions: ConnectionOptions;
     additionalJetStreamOptions: JetStreamOptions;
     encoder: typeof StringCodec | typeof JSONCodec;
 
     constructor() {
         this.additionalJetStreamOptions = {};
-        this.requiredConsumers = new Map();
+        this.requiredConsumers = {};
         this.requiredStreams = [];
         this.additionalJetStreamOptions = {};
         this.additionalNatsOptions = {};
         this.encoder = JSONCodec;
     }
 
-    setRequiredConsumers(requiredConsumers: Map<string, ConsumerConfig>): void {
+    setRequiredConsumers(requiredConsumers: ConsumerOptions): void {
         this.requiredConsumers = requiredConsumers;
     }
 
-    setRequiredStreams(requiredStreams: StreamConfig[]): void {
+    setRequiredStreams(requiredStreams: StreamOptions): void {
         this.requiredStreams = requiredStreams;
     }
 
@@ -73,46 +65,67 @@ export class OptionsBuilder implements IOptionsBuilder {
         return this;
     }
 
-    // Streams are part of JetStream, the protocol on top of NATS set durability guarantees.
-    // Streams should be properly configured when using one of the durable publish or subscribe functions.
-    setRequiredStreams(requiredStreams: StreamConfig[]) {
+    /**
+     * Streams are part of JetStream, the protocol on top of NATS set durability guarantees.
+     * Streams should be properly configured when using one of the durable publish or subscribe functions.
+     * @param requiredStreams
+     * @returns
+     */
+    setRequiredStreams(requiredStreams: StreamOptions) {
         this.options.setRequiredStreams(requiredStreams);
         return this;
     }
 
-    // setRequiredConsumers returns the corresponding Option
-    // indicating that consumers set the given config should be configured for the given stream
-    // during Connect
-    //
-    // Consumers are part of JetStream, the protocol on top of NATS set durability guarantees.
-    // Streams should be properly configured when using one of the durable subscribe functions.
-    //
-    // This will only overwrite the list of required consumers for the given stream name
-    setRequiredConsumers(requiredConsumers: Map<string, ConsumerConfig>) {
+    /**
+     * setRequiredConsumers returns the corresponding Option
+     * indicating that consumers set the given config should be configured for the given stream
+     * during Connect
+     *
+     * Consumers are part of JetStream, the protocol on top of NATS set durability guarantees.
+     * Streams should be properly configured when using one of the durable subscribe functions.
+     *
+     * This will only overwrite the list of required consumers for the given stream name
+     * @param requiredConsumers
+     * @returns
+     */
+    setRequiredConsumers(requiredConsumers: ConsumerOptions) {
         this.options.setRequiredConsumers(requiredConsumers);
         return this;
     }
 
-    // setAdditionalNatsOptions returns the corresponding Option
-    // for passing the given additional options to the nats.Connect call
+    /**
+     * setAdditionalNatsOptions returns the corresponding Option
+     * for passing the given additional options to the nats.Connect call
+     */
     setAdditionalNatsOptions(additionalNatsOptions: ConnectionOptions) {
         this.options.setAdditionalNatsOptions(additionalNatsOptions);
         return this;
     }
 
-    // setAdditionalJetStreamOptions returns the corresponding Option
-    // for passing the given additional options the the nats.Conn.JetStream call
+    /**
+     * setAdditionalJetStreamOptions returns the corresponding Option
+     * for passing the given additional options the the nats.Conn.JetStream call
+     * @param additionalJetStreamOptions
+     * @returns
+     */
     setAdditionalJetStreamOptions(additionalJetStreamOptions: JetStreamOptions) {
         this.options.setAdditionalJetStreamOptions(additionalJetStreamOptions);
         return this;
     }
-    // setEncoder returns the corresponding Option
-    // for using the given encoder for encoding payloads
+    /**
+     * setEncoder returns the corresponding Option
+     * for using the given encoder for encoding payloads
+     * @param encoder
+     * @returns
+     */
     setEncoder(encoder: typeof StringCodec | typeof JSONCodec) {
         this.options.setEncoder(encoder);
         return this;
     }
 
+    /**
+     * @returns Options after set
+     */
     build(): Options {
         return this.options;
     }
