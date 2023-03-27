@@ -3,7 +3,7 @@ import { RetentionPolicy, JSONCodec, AckPolicy } from 'nats';
 import { Config, MessagingConnector, PersistentConfigurationAction } from '../../../src';
 
 describe('create stream', () => {
-    test('publish normal', async () => {
+    test('Workqueue stream', async () => {
         const config: Config = {
             serverURL: ['nats://0.0.0.0:4222'],
             requiredStreamsConfigurationAction: PersistentConfigurationAction.CreateIfMissing,
@@ -43,8 +43,8 @@ describe('create stream', () => {
                     deliverSubject: 'test',
                 },
                 (msg) => {
-                    console.log(msg);
                     expect(msg).toBe('test');
+                    mc.disconnect();
                 },
             );
             mc.publishDurable('testCreateStream.testA', 'test');
