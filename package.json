@@ -1,7 +1,7 @@
 {
-    "name": "typescript-starter",
-    "version": "1.0.0",
-    "description": "A basic typescript app starter for 2023.",
+    "name": "io-nats",
+    "version": "0.1.0",
+    "description": "Nats io wrapper library",
     "main": "index.js",
     "scripts": {
         "build": "rimraf ./build && tsc",
@@ -25,7 +25,7 @@
         }
     },
     "keywords": [],
-    "author": "",
+    "author": "Huy Do <doquochuy189@gmail.com>",
     "license": "ISC",
     "devDependencies": {
         "@types/jest": "^29.5.0",
@@ -52,5 +52,13 @@
         "jest-cucumber": "^3.0.1",
         "nats": "^2.12.1",
         "reflect-metadata": "^0.1.13"
-    }
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/huydq189/ionats.git"
+    },
+    "bugs": {
+        "url": "https://github.com/huydq189/ionats/issues"
+    },
+    "homepage": "https://github.com/huydq189/ionats#readme"
 }
